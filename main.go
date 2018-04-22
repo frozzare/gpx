@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/frozzare/gpx/gpx"
 	"github.com/spf13/pflag"
@@ -75,9 +77,22 @@ func main() {
 	args = append([]string{*pkgFlag}, args...)
 	cmd := strings.Join(args, " ")
 
+	// Catch interrupt/sigterm to be able to clean up.
+	c := make(chan os.Signal, 1)
+	d := make(chan bool, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		d <- true
+	}()
+
 	// Run package.
 	if err := gpx.Run(cmd); err != nil {
-		log.Fatal(err)
+		if len(d) == 0 {
+			close(c)
+			close(d)
+			log.Fatal(err)
+		}
 	}
 
 	// Remove package.
